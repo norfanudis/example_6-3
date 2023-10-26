@@ -3,6 +3,7 @@
 #include "mbed.h"
 #include "arm_book_lib.h"
 #include "display.h"
+#include "pc_serial_com.h"
 
 //=====[Declaration of private defines]========================================
 
@@ -108,7 +109,64 @@ static void displayDataBusWrite( uint8_t dataByte );
 static void displayCodeWrite( bool type, uint8_t dataBus );
 
 //=====[Implementations of public functions]===================================
+/*
+9.b
+El tipo de interfaz y su variante se determinan a través de la variable display.connection,
+ que se utiliza para especificar el tipo de conexión utilizada. Hay tres opciones posibles en 
+ el código según el tipo de dato definido en display.h, displayConnection_t.
 
+DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER: En esta opción, se utiliza un módulo PCF8574 IO 
+Expander para controlar el display a través de una interfaz I2C. Los pines I2C I2C1_SDA y I2C1_SCL 
+se utilizan para la comunicación I2C con el módulo PCF8574.
+*/
+
+/*
+9.c
+------------------Arbol de displayInit en display.cpp--------------------
+- displayInit(displayConnection_t connection) en display.cpp
+  - Llama a:
+    - delay(int milliseconds) en arm_book_lib.h 
+    - displayCodeWrite(bool type, uint8_t dataBus)
+      - Llama a:
+        - displayPinWrite(uint8_t pinName, int value)
+        - displayDataBusWrite(uint8_t dataBus)
+  - Dependencias:
+    - mbed.h
+    - arm_book_lib.h 
+
+- delay(int milliseconds) en arm_book_lib.h
+  - Llama a:
+    - thread_sleep_for(ms) en mbed.h
+  - Dependencias:
+    - mbed.h 
+
+-thread_sleep_for(ms) en mbed.h
+  - Llama a:
+    - do_timed_sleep_absolute (default que utiliza el clock del sistema operativo)
+    - sleep_until ( si se define el flag MBED_CONF_RTOS_PRESENT se utiliza el clock del thread del kernel)
+  - Dependencias:
+    - platform/internal/mbed_os_timer.h 
+    - "rtos/Kernel.h" y "rtos/ThisThread.h" (MBED_CONF_RTOS_PRESENT si está definida)
+
+- displayCodeWrite(bool type, uint8_t dataBus) en display.cpp
+  - Llama a:
+    - displayPinWrite(uint8_t pinName, int value)
+    - displayDataBusWrite(uint8_t dataBus)
+  - I2C.h
+
+- displayPinWrite(uint8_t pinName, int value) en display.cpp
+  - Llama a:
+    - write en I2C
+  - Dependencia:
+    - I2C
+ 
+- displayDataBusWrite(uint8_t dataBus) en display.cpp
+  - Llama a:
+    - displayPinWrite(uint8_t pinName, int value) en display.cpp
+    - delay(int milliseconds) en arm_book_lib.h 
+  - Dependencias:
+    - arm_book_lib.h
+*/
 void displayInit( displayConnection_t connection )
 {
     display.connection = connection;
@@ -194,6 +252,8 @@ void displayInit( displayConnection_t connection )
 
 void displayCharPositionWrite( uint8_t charPositionX, uint8_t charPositionY )
 {    
+    char str[100];
+    //int stringLength;
     switch( charPositionY ) {
         case 0:
             displayCodeWrite( DISPLAY_RS_INSTRUCTION, 
@@ -227,13 +287,20 @@ void displayCharPositionWrite( uint8_t charPositionX, uint8_t charPositionY )
             delay( 1 );         
         break;
     }
+    sprintf ( str, "Fila: %03d, Columna: %03d \n",charPositionY,charPositionX );    //Imprime por consola la coluna y fila a la que va a escribir
+    pcSerialComStringWrite(str);
 }
+
 
 void displayStringWrite( const char * str )
 {
+    char strSerial[100];                             //Imprime por consola lo que va a mostrar el display
+    sprintf(strSerial,"%s \n",str);
+    pcSerialComStringWrite(strSerial);
     while (*str) {
         displayCodeWrite(DISPLAY_RS_DATA, *str++);
     }
+    
 }
 
 //=====[Implementations of private functions]==================================
